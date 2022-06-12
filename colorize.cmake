@@ -13,7 +13,7 @@
 if(NOT _COLORIZE_INCLUDED)
 
     if(DEFINED ENV{SHELL}) #
-        if($ENV{SHELL} MATCHES "bash|csh|zsh")    #
+        if($ENV{SHELL} MATCHES "bash|csh|zsh|ash")    #
         #   if(NOT WIN32)
             string(ASCII 27 Esc)
             set(ColourReset "${Esc}[m")

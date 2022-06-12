@@ -10,12 +10,6 @@ if (NOT _common_cmake_included)
     endif()
 endif ()
 
-if (NOT _shared_definitions)
-    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/shared_definitions.cmake")
-        include (${CMAKE_CURRENT_LIST_DIR}/shared_definitions.cmake)
-    endif()
-endif ()
-
 message_format (STATUS "${lead_mark_location}" "${PROJECT_NAME} module initial" "CMAKE_FIND_LIBRARY_SUFFIXES" "=" "${CMAKE_FIND_LIBRARY_SUFFIXES}")
 
 if (BUILD_SHARED_LIBS)

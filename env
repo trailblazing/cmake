@@ -1,0 +1,284 @@
+#!/usr/bin/env sh
+# Host toolchain root
+HOST_ROOT=/usr
+if [ "${PATH}" = "${PATH/$HOST_ROOT\/bin/}" ]; then
+    export PATH=$HOST_ROOT/bin:$PATH
+fi
+
+. /etc/os-release
+
+CFLAGS=""
+CXXFLAGS=""
+CPPFLAGS=""
+LDFLAGS=""
+# u_name=$(uname -a)
+# os_name=$(echo $u_name | awk '{print $2}')
+# if [ "${os_name}" != "alpine" ]; then
+# if ! cat /etc/*release | grep ^ID |grep alpine; then
+# if [ "${ID}" != "alpine" ]; then
+export SHARE_PREFIX="/opt"
+export ARCH=x86_64
+export HOST=x86_64
+export TARGET="x86_64-linux-musl"
+export CROSS_COMPILE=${TARGET}
+# Target toolchain root
+export SYSROOT=${SHARE_PREFIX}/${TARGET}/sysroot
+if [ ! -d ${SYSROOT} ]; then
+    doas mkdir -p ${SYSROOT}
+fi
+export INITRAMFS=${SHARE_PREFIX}/${TARGET}/initramfs
+if [ ! -d ${INITRAMFS} ]; then
+    doas mkdir -p ${INITRAMFS}
+fi
+export DISTDIR=${SHARE_PREFIX}/${TARGET}/build
+if [ ! -d ${DISTDIR} ]; then
+    doas mkdir -p ${DISTDIR}
+fi
+export XDG_BIN=${SHARE_PREFIX}/local/bin
+export PATH="${XDG_BIN}:$PATH"
+
+doas ln -sf `which lld`     $XDG_BIN/${CROSS_COMPILE}-ld
+doas ln -sf `which lld`     $XDG_BIN/${CROSS_COMPILE}-ld.lld
+doas ln -sf `which clang`   $XDG_BIN/${CROSS_COMPILE}-cc
+doas ln -sf `which clang`   $XDG_BIN/${CROSS_COMPILE}-gcc
+doas ln -sf `which clang`   $XDG_BIN/${CROSS_COMPILE}-clang
+doas ln -sf `which clang++` $XDG_BIN/${CROSS_COMPILE}-c++
+doas ln -sf `which clang++` $XDG_BIN/${CROSS_COMPILE}-g++
+doas ln -sf `which clang++` $XDG_BIN/${CROSS_COMPILE}-clang++
+
+for i in ar nm objcopy objdump ranlib strip;do
+    doas ln -sf `which llvm-$i` $XDG_BIN/${CROSS_COMPILE}-$i
+done
+
+LDFLAGS="-fuse-ld=lld $LDFLAGS"
+export LD=${HOST_ROOT}/bin/ld.lld
+export HOSTLD=${HOST_ROOT}/bin/ld.lld
+
+export CC=${HOST_ROOT}/bin/clang
+export CXX=${HOST_ROOT}/bin/clang++
+
+
+export HOSTCC=${HOST_ROOT}/bin/clang
+export HOSTCXX=${HOST_ROOT}/bin/clang++
+
+export AS=${HOST_ROOT}/bin/llvm-as
+export HOSTAS=${HOST_ROOT}/bin/llvm-as
+
+export AR=${AR:=${HOST_ROOT}/bin/llvm-ar}
+export AR=${HOST_ROOT}/bin/llvm-ar
+export HOSTAR=${HOST_ROOT}/bin/llvm-ar
+
+export NM=${NM:=${HOST_ROOT}/bin/llvm-nm}
+export NM=${HOST_ROOT}/bin/llvm-nm
+export HOSTNM=${HOST_ROOT}/bin/llvm-nm
+
+export RANLIB=${HOST_ROOT}/bin/llvm-ranlib
+export HOSTRANLIB=${HOST_ROOT}/bin/llvm-ranlib
+
+export STRIP=${HOST_ROOT}/bin/llvm-strip
+
+export OBJCOPY=${HOST_ROOT}/bin/llvm-objcopy
+
+export OBJDUMP=${HOST_ROOT}/bin/llvm-objdump
+
+export READELF=${HOST_ROOT}/bin/llvm-readelf
+
+# llvm-ranlib -> llvm-ar*
+# llvm-lib -> llvm-ar*
+# llvm-dlltool -> llvm-ar*
+# llvm-strip -> llvm-objcopy*
+# llvm-otool -> llvm-objdump*
+# llvm-install-name-tool -> llvm-objcopy*
+# llvm-bitcode-strip -> llvm-objcopy*
+# llvm-windres -> llvm-rc*
+# llvm-readelf -> llvm-readobj*
+# llvm-addr2line -> llvm-symbolizer*
+
+# https://docs.kernel.org/kbuild/llvm.html
+export LLVM_IAS=1
+export LLVM=1
+
+export LLVM_BIN=${LLVM_BIN:=$(${HOST_ROOT}/bin/llvm-config --bindir)}
+COMPILER_RESOURCE_DIR=$("$CC" --print-resource-dir)
+# export CXXFLAGS="$CXXFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mcpu=x86-64"
+# x86 uses -march and -mtune instead of -mcpu.
+# https://groups.google.com/g/llvm-dev/c/2_o0Hp_b3V8/m/Xqv6UnceCgAJ
+export TOOL_CLANG_MAJOR_VERSION="$($CXX -dM -E -x c /dev/null | grep __clang_major__ | awk '{print $3}')"
+
+
+CFLAGS="$CFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN}"
+# if [ $TOOL_CLANG_MAJOR_VERSION -gt 12 ]; then
+CXXFLAGS="$CFLAGS"
+# export CPPFLAGS="$CPPFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mcpu=x86-64"
+CPPFLAGS="$CFLAGS"
+# export CFLAGS="$CFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mcpu=x86-64"
+LDFLAGS="$LDFLAGS --rtlib=compiler-rt -flto=thin"
+
+# else
+# export CXXFLAGS="$CXXFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mtune=native"
+# export CPPFLAGS="$CPPFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mtune=native"
+# export CFLAGS="$CFLAGS --force-chr=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mtune=native"
+# export CXXFLAGS="$CXXFLAGS --force-chr=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mtune=native"
+# export CPPFLAGS="$CPPFLAGS --force-chr=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mtune=native"
+# export CFLAGS="$CFLAGS -resource-dir=${COMPILER_RESOURCE_DIR} -B${LLVM_BIN} -Os -fPIC -mtune=native"
+# fi
+
+# HOST_CLANG_VERSION=$($CXX -v 2>&1 | grep version | awk '{print $4}')
+
+CFLAGS="--target=x86_64-linux-musl -Os -pipe -fPIC -mtune=native"
+
+# if [ "${ID}" != "alpine" ]; then
+#     SYSROOT=${HOST_ROOT}
+# fi
+
+CFLAGS=" --sysroot=${SYSROOT} $CFLAGS"
+
+CXXFLAGS="$CFLAGS"
+
+HOST_LLVM_VERSION=$(llvm-config --version)
+# export HOST_LLVM_VERSION=${HOST_LLVM_VERSION}
+CXX_STANDARD_VER=c++20
+
+# export CXX_STANDARD_VER=${CXX_STANDARD_VER}
+search_config=$(find /usr/include -type f -name "__config" -exec echo {} +)
+HAS_LIBCXX=0
+for file in $search_config ;
+do if [ -f "$file" ]; then
+    key_word=$(printf "#include <$file>\nint main () { return 0;}" | $CC -E -stdlib=libc++ -x c++ -dM - | grep _LIBCPP_VERSION | awk '{print $2}');
+    if [ "$key_word" = "_LIBCPP_VERSION" ]; then
+        HAS_LIBCXX=1
+        break
+    fi;
+fi;
+done
+# if [ -f "/usr/include/c++/v1/__config" ]; then
+# HAS_LIBCXX=$(printf "#include <ciso646>\nint main () {}" | $CC -E -stdlib=libc++ -x c++ -dM - | grep _LIBCPP_VERSION | awk '{print $2}')
+# HAS_LIBCXX=$(printf "#include <__config>\nint main () {}" | $CXX -E -stdlib=libc++ -x c++ -dM - | grep _LIBCPP_VERSION | awk '{print $2}')
+
+# if [ "$HAS_LIBCXX" = "_LIBCPP_VERSION" ]; then
+if [ "1" = "$HAS_LIBCXX" ]; then
+    LLVM_ENABLE_LIBCXX="ON"
+    LLVM_ENABLE_LIBCXXABI="ON"
+    LIBCXX_PREFIX=""
+    CXXFLAGS="-D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE=1 $CXXFLAGS"
+LDFLAGS="${LDFLAGS} \
+-lc++ \
+-lc++abi \
+-Wl,-lunwind \
+-unwindlib=libunwind \
+"
+else
+    LIBCXX_PREFIX="std"
+fi
+# fi
+CXXFLAGS="$CXXFLAGS -stdlib=lib${LIBCXX_PREFIX}c++"
+
+SUPPORT_MUSL=$(ldd --version 2>&1 | grep musl | awk '{print $1}')
+if expr "$OSTYPE" : "musl" 1>/dev/null || [ "$SUPPORT_MUSL" = "musl" ]; then
+    CXXFLAGS="-DLIBCXX_HAS_MUSL_LIBC=1 -D_LIBCPP_HAS_MUSL_LIBC=1 $CXXFLAGS"
+fi
+
+export CFLAGS="$CFLAGS \
+-nostartfiles \
+-nostdinc \
+-fvisibility=hidden \
+-pthread \
+-isystem ${HOST_ROOT}/include \
+-I ${HOST_ROOT}/include \
+-isystem /usr/lib/clang/$HOST_LLVM_VERSION/include \
+"
+
+# -nostdinc \
+# -DSDL_DISABLE_IMMINTRIN_H \
+# -Os -pipe -march=native \
+# -I${HOST_ROOT}/include \
+
+CXXFLAGS="$CXXFLAGS \
+-nostartfiles \
+-nostdinc++ \
+-nostdlib \
+-nodefaultlibs \
+-fvisibility=hidden \
+-pthread \
+-isystem ${HOST_ROOT}/include/c++/v1 \
+-isystem ${HOST_ROOT}/include \
+-I ${HOST_ROOT}/include \
+-isystem /usr/lib/clang/$HOST_LLVM_VERSION/include \
+"
+
+# -nostdinc++ \
+# --std=$CXX_STANDARD_VER \
+# -Os -pipe -march=native \
+# -stdlib=lib${LIBCXX_PREFIX}c++ \
+# -nostdinc \
+# -I${HOST_ROOT}/include \
+# -stdlib=libc++ \
+
+HOST_LLVM_LIBDIR=$(llvm-config --libdir)
+LDFLAGS="${LDFLAGS} \
+-nostdlib \
+-nodefaultlibs \
+-lpthread \
+-no-pie \
+-Wl,-rpath-link ${HOST_LLVM_LIBDIR} \
+-Wl,-rpath=${HOST_ROOT}/lib \
+-Wl,-L ${HOST_LLVM_LIBDIR} \
+-L${HOST_ROOT}/lib \
+-lc \
+"
+
+# -lc++abi \
+# -lc++ \
+# -lpthread \
+# -stdlib=libc++ \
+
+
+# else
+if [ "${ID}" != "alpine" ]; then
+LDFLAGS="${LDFLAGS} \
+-L/lib
+"
+fi
+#     export CC=${HOST_ROOT}/bin/gcc
+#     export CXX=${HOST_ROOT}/bin/g++
+#
+#
+#     export HOSTCC=${HOST_ROOT}/bin/gcc
+#     export HOSTCXX=${HOST_ROOT}/bin/g++
+#     LDFLAGS="-fuse-ld=bfd $LDFLAGS"
+#     # export LDFLAGS="-fuse-ld=gold $LDFLAGS"
+#     export LD=${HOST_ROOT}/bin/ld.bfd
+#     export HOSTLD=${HOST_ROOT}/bin/ld.bfd
+# fi
+
+export CXXFLAGS="$CXXFLAGS"
+CPPFLAGS="$CXXFLAGS"
+export CPPFLAGS="$CXXFLAGS"
+export LDFLAGS="${LDFLAGS}"
+
+# You may also set CFLAGS, CPPFLAGS, CXXFLAGS, and LDFLAGS
+# See build/toolchain/linux/unbundle/ in the Chromium source for more details.
+#
+# # Hack to allow clang to find the default cfi_blacklist.txt
+# export CXXFLAGS+=-resource-dir=$("$CC" --print-resource-dir)
+# export CPPFLAGS+=-resource-dir=$("$CC" --print-resource-dir)
+# export CFLAGS+=-resource-dir=$("$CC" --print-resource-dir)
+# declare -A CML
+CMLFS=${SHARE_PREFIX}/cmlfs
+CML_BIN_DIR=${SHARE_PREFIX}/cmlfs
+export CMLFS=${CMLFS}
+export CML_BIN_DIR=${SHARE_PREFIX}/cmlfs
+if [ ! -d ${CML_BIN_DIR} ]; then
+    doas mkdir -p ${CML_BIN_DIR}
+fi
+
+CML_BUILD_DIR=${BUILD_PREFIX}/toolchain/cmlfs
+export CML_BUILD_DIR=${BUILD_PREFIX}/toolchain/cmlfs
+if [ ! -d ${CML_BUILD_DIR} ]; then
+    doas mkdir -p ${CML_BUILD_DIR}
+fi
+CML_SRC_DIR=${SRC_PREFIX}/toolchain/cmlfs
+export CML_SRC_DIR=${SRC_PREFIX}/toolchain/cmlfs
+
+# For Chimera Linux
+export BOOTSTRAP_ROOT="sysroot"
